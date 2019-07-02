@@ -3,7 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tkinter import Button, Tk, Frame, Entry, Label, StringVar #, Checkbutton, BooleanVar
 import time
-
+"""Keithley 2602B automatisation program"""
+#--------------------------------------------------------------------------
 def connection_choice(connection):
     """enables the user to choose the connection"""
     global keithley
@@ -44,16 +45,16 @@ def switchON(smux, onoff=False):
 #--------------------------------------------------------------------------        
 def measurement(smux,volts_min,volts_max,nb,delay=0,compliance=0.1,R=0):
     """Send voltage and measure current"""
-    global tension_input, tension_diode, measure #allow to save data even when error detected
+    global voltage_input, voltage_diode, measure #allow to save data even when error detected
 
     measure=np.array([]) #creat array for futur measures
-    tension_diode=np.array([]) # array for the real voltage across the diode
-    tension_input=np.linspace(volts_min,volts_max,nb) #creat an array with all tensions needed for measurement
+    voltage_diode=np.array([]) # array for the real voltage across the diode
+    voltage_input=np.linspace(volts_min,volts_max,nb) #creat an array with all voltages needed for measurement
 
     print('U(V)\tUd(V)\tI(A)\t\tpoints') #display titles
 
     i=0    
-    for x in tension_input: #loop over voltage values 
+    for x in voltage_input: #loop over voltage values 
         i+=1 #used to display measure number (could use enumerate instead)
         
         try:    #SOURCE
@@ -65,15 +66,15 @@ def measurement(smux,volts_min,volts_max,nb,delay=0,compliance=0.1,R=0):
         time.sleep(delay) #delay not needed
         
         try:    #MEASURE
-            y=float(keithley.query("print(smu%s.measure.i())" % smux)) #ask the current value from smux
+            y=float(keithley.query("print(smu%s.measure.i())" % smux))  #read current value
         except:
             print("error from reading measurement")
             break    
         
-        tension_diode=np.append(tension_diode, x - (R*y))  #tension correction due to safety resistance    
+        voltage_diode=np.append(voltage_diode, x - (R*y))  #voltage correction due to safety resistance    
         measure=np.append(measure, y) #add the current value to a array regrouping all measurements
 
-        print ("%3.3f\t%3.3f\t%s\t%s/%s" % (x,tension_diode[-1],y,i,nb)) #display voltage and current
+        print ("%3.3f\t%3.3f\t%s\t%s/%s" % (x,voltage_diode[-1],y,i,nb)) #display voltage and current
 
         if y>=compliance:
             print("current too high")            
@@ -85,11 +86,11 @@ def measurement(smux,volts_min,volts_max,nb,delay=0,compliance=0.1,R=0):
         print("error : can't apply 0 volt")
         reset()
         
-    return (tension_diode,measure) #return the voltage and current diode
+    return (voltage_diode,measure) #return the voltage and current diode
 #--------------------------------------------------------------------------     
 def complete_measure(smux,volts_min,volts_max,nb,delay=0,compliance=0.1,R=0):
     """Main fonction taking tkinter value as input. Plot measures and save them."""       
-    global tension_input, tension_diode, measure
+    global voltage_input, voltage_diode, measure
     
     switchON(smux, True) #active smua
 
@@ -98,11 +99,11 @@ def complete_measure(smux,volts_min,volts_max,nb,delay=0,compliance=0.1,R=0):
     except:
         raise StopIteration ("error from choosing the source type")
         
-    (tension_diode,measure)=measurement(smux,volts_min,volts_max,nb,R=R,compliance=compliance) #send chosen voltage and measures the current associated
+    (voltage_diode,measure)=measurement(smux,volts_min,volts_max,nb,compliance=compliance,R=R) #send chosen voltage and measures the current associated
 
     switchON(smux, False) #deactivate smu
 
-    np.savetxt('Diode %s R=%s.csv' % (smux,str(R)),np.transpose((tension_diode,measure)),delimiter="\t")
+    np.savetxt('Diode %s R=%s.csv' % (smux,str(R)),np.transpose((voltage_diode,measure)),delimiter="\t")
     print("data saved")
     
     try:
@@ -111,7 +112,7 @@ def complete_measure(smux,volts_min,volts_max,nb,delay=0,compliance=0.1,R=0):
         plt.title('Diode '+str(smux)+' R='+str(R))
         plt.ylabel('I(A)')
         plt.xlabel('U(V)')
-        plt.plot(tension_diode,measure, '+', label='Diode '+smux) #display current in fct of input_tension
+        plt.semilogy(voltage_diode,measure, '+', label='Diode '+smux) #display current in fct of input_voltage
         plt.legend() #add legend to the graph (take label from plot)
         plt.savefig('Diode %s R=%s.pdf' % (smux,str(R)), format='pdf', dpi=1000, bbox_inches='tight') #save the graph in a vector file
         plt.show() #plot data
@@ -135,7 +136,7 @@ def compute():
         try:
             volts_min=float(volt_min_entry.get())   # min voltage 
             volts_max=float(volt_max_entry.get())   # max voltage
-            R=float(resistance_entry.get())   # pretection resistance        
+            R=float(resistance_entry.get())   # protection resistance        
             if abs(volts_max)>20 or abs(volts_min)>20:
                 texte5="abs(volt) <=20"
                 message5["text"] = texte5      
@@ -155,7 +156,7 @@ def compute():
                         message7["text"] = texte7         
                         print(texte7)                                 
                     except Exception as ex:
-                        print(ex)
+                        print(ex) #display the error name
                         texte6="Error from measurement detected"
                         message6["text"] = texte6          
                         print(texte6)                                       
@@ -169,23 +170,23 @@ def compute():
         message1["text"] = texte
         print(texte)
 # =============================================================================          
-"""Programme begin"""
+"""Program begin"""
 volts_min=0  #min voltage
-nb=101       #nb de mesures
+nb=101       #how many measures
 volts_max=1   # max voltage
-delay=0  #temps entre mesures en secondes
-smux='a'
+delay=0 #time between applying voltage and measuring current (not needed)
+smux='a' #name of the smu (a or b)
 R=100 # safe resistance value
-compliance=0.2
+compliance=0.2 # max current value
 
 #connection='GPIB0::26::INSTR'
 connection='COM1'
-connection_choice(connection) #permet de choisir le type de connection
+connection_choice(connection) #try to connect the devide using GPIB or RS232 (com1)
 reset() #reset completement les smu
 keithley.write("beeper.enable=0") #desactive le beep
 # =============================================================================   
 """Tkinter menu used to facilitate measurement from an user"""
-root = Tk()
+root = Tk() #used to creat user interface
 frame = Frame(root)
 root.title("Keithley options")
 frame.pack()
@@ -196,33 +197,33 @@ smux_entry = Entry(frame, textvariable=StringVar(frame, value=smux), bd =2, widt
 smux_entry.grid(row=0, column=1)
 
 message1 = Label(frame, text="")   #allow to display message when activate [text]
-message1.grid(row=0, column=3) 
+message1.grid(row=0, column=2) 
 
-L1 = Label(frame, text="Initial Voltage(V)")
+L1 = Label(frame, text="start volt(V)")
 L1.grid(row=1, column=0)
 volt_min_entry = Entry(frame, textvariable=StringVar(frame, value=volts_min), bd =2, width=7)
 volt_min_entry.grid(row=1, column=1)
 
 message3 = Label(frame, text="")
-message3.grid(row=1, column=3) 
+message3.grid(row=1, column=2) 
 
-L2 = Label(frame, text="Final Voltage(V)")
+L2 = Label(frame, text="end volt(V)")
 L2.grid(row=2, column=0)
 volt_max_entry = Entry(frame, textvariable=StringVar(frame, value=volts_max), bd =2, width=7)
 volt_max_entry.grid(row=2, column=1)
 
 message5 = Label(frame, text="")
-message5.grid(row=2, column=3) 
+message5.grid(row=2, column=2) 
 
-L3 = Label(frame, text="Number of measurements")
+L3 = Label(frame, text="nbr pts")
 L3.grid(row=3, column=0)
 point_number_entry = Entry(frame, textvariable=StringVar(frame, value=nb), bd =2, width=7)
 point_number_entry.grid(row=3, column=1)
 
 message4 = Label(frame, text="")
-message4.grid(row=3, column=3) 
+message4.grid(row=3, column=2) 
 
-L4 = Label(frame, text="Resistance(ohm)")
+L4 = Label(frame, text="resistance(ohm)")
 L4.grid(row=4, column=0)
 resistance_entry = Entry(frame, textvariable=StringVar(frame, value=R), bd =2, width=7)
 resistance_entry.grid(row=4, column=1)
@@ -233,16 +234,16 @@ resistance_entry.grid(row=4, column=1)
 #delay_entry.grid(row=4, column=1)
 
 message2 = Label(frame, text="")
-message2.grid(row=5, column=3)
+message2.grid(row=5, column=2)
 
 message6 = Label(frame, text="")
-message6.grid(row=6, column=3)
+message6.grid(row=6, column=2)
 
 compute_button = Button(frame, text="Measure", width=14, command=compute) #button used to get all values and start measures
 compute_button.grid(row=6, column=1)
 
 message7 = Label(frame, text="")
-message7.grid(row=6, column=3)
+message7.grid(row=6, column=2)
 
 root.mainloop() #instance looping until closed
 close_all() #reset and close connection with the instrument
